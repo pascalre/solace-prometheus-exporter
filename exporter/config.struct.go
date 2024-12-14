@@ -24,8 +24,13 @@ type Config struct {
 	Pkcs12File              string
 	Pkcs12Pass              string
 	ScrapeURI               string
+	AuthScheme              string
 	Username                string
 	Password                string
+	OAuth2TokenURL          string
+	OAuth2Scope             string
+	OAuth2ClientID          string
+	OAuth2ClientSecret      string
 	DefaultVpn              string
 	SslVerify               bool
 	useSystemProxy          bool
@@ -100,12 +105,32 @@ func ParseConfig(configFile string) (map[string][]DataSource, *Config, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	conf.Username, err = parseConfigString(cfg, "solace", "username", "SOLACE_USERNAME")
+	conf.AuthScheme, err = parseConfigString(cfg, "solace", "authScheme", "AUTH_SCHEME")
 	if err != nil {
+		conf.AuthScheme = "basic"
+	}
+	conf.Username, err = parseConfigString(cfg, "solace", "username", "SOLACE_USERNAME")
+	if conf.AuthScheme == "basic" && err != nil {
 		return nil, nil, err
 	}
 	conf.Password, err = parseConfigString(cfg, "solace", "password", "SOLACE_PASSWORD")
-	if err != nil {
+	if conf.AuthScheme == "basic" && err != nil {
+		return nil, nil, err
+	}
+	conf.OAuth2TokenURL, err = parseConfigString(cfg, "solace", "OAuth2TokenURL", "OAUTH2_TOKEN_URL")
+	if conf.AuthScheme == "oauth2" && err != nil {
+		return nil, nil, err
+	}
+	conf.OAuth2Scope, err = parseConfigString(cfg, "solace", "OAuth2Scope", "OAUTH2_SCOPE")
+	if conf.AuthScheme == "oauth2" && err != nil {
+		return nil, nil, err
+	}
+	conf.OAuth2ClientID, err = parseConfigString(cfg, "solace", "OAuth2ClientId", "OAUTH2_CLIENT_ID")
+	if conf.AuthScheme == "oauth2" && err != nil {
+		return nil, nil, err
+	}
+	conf.OAuth2ClientSecret, err = parseConfigString(cfg, "solace", "OAuth2ClientSecret", "OAUTH2_CLIENT_SECRET")
+	if conf.AuthScheme == "oauth2" && err != nil {
 		return nil, nil, err
 	}
 	conf.DefaultVpn, err = parseConfigString(cfg, "solace", "defaultVpn", "SOLACE_DEFAULT_VPN")
@@ -286,6 +311,15 @@ func (conf *Config) redirectPolicyFunc(req *http.Request, _ []*http.Request) err
 
 func (conf *Config) httpVisitor() func(*http.Request) {
 	return func(request *http.Request) {
-		request.SetBasicAuth(conf.Username, conf.Password)
+		if conf.AuthScheme == "oauth2" {
+			token, err := GetOAuthToken(conf.OAuth2TokenURL, conf.OAuth2Scope, conf.OAuth2ClientID, conf.OAuth2ClientSecret)
+			if err != nil {
+				fmt.Printf("Error fetching OAuth token: %v\n", err)
+				return
+			}
+			request.Header.Add("Authorization", fmt.Sprintf("Bearer: %s", token))
+		} else {
+			request.SetBasicAuth(conf.Username, conf.Password)
+		}
 	}
 }
