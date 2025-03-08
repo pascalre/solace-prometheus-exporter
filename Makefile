@@ -31,3 +31,6 @@ clean: ## Remove previous build
 .PHONY:
 help: ## Display this help screen
 	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
+lint:
+	golangci-lint run  --timeout=600s --enable=asasalint,asciicheck,bidichk,containedctx,contextcheck,decorder,durationcheck,errorlint,exptostd,fatcontext,forbidigo,gocheckcompilerdirectives,gochecksumtype,goconst,gofmt,goimports,gosmopolitan,grouper,iface,importas,mirror,misspell,nilerr,nilnil,perfsprint,prealloc,reassign,recvcheck,sloglint,testifylint,unconvert,wastedassign,whitespace
