@@ -238,7 +238,7 @@ func main() {
 					<tr><td>TopicEndpointDetails</td><td>yes</td><td>yes</td><td>may harm broker if many topic-endpoints</td></tr>
 					<tr><td>BridgeRemote</td><td>yes</td><td>yes</td><td>dont harm broker</td></tr>`))
 
-		if conf.IsHWBroker == true {
+		if conf.IsHWBroker {
 			w.Write([]byte(`					
 					<tr><td>Alarm (only for Hardware brokers)</td><td>no</td><td>no</td><td>dont harm broker</td></tr>
 					<tr><td>Environment (only for Hardware brokers)</td><td>no</td><td>no</td><td>dont harm broker</td></tr>
@@ -254,7 +254,6 @@ func main() {
             <ul>
             </body>
             </html>`))
-
 	})
 
 	// start server
@@ -266,7 +265,6 @@ func main() {
 			os.Exit(2)
 		}
 	}
-
 }
 
 func doHandleAsync(w http.ResponseWriter, r *http.Request, asyncFetcher *exporter.AsyncFetcher, conf exporter.Config, logger log.Logger) (resultCode string) {

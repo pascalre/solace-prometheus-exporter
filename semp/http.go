@@ -2,11 +2,12 @@ package semp
 
 import (
 	"fmt"
-	"github.com/go-kit/kit/log/level"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-kit/log/level"
 )
 
 const longQuery time.Duration = 2 * 1000 * 1000 * 1000             // 2 seconds

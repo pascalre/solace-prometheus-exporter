@@ -2,13 +2,14 @@ package exporter
 
 import (
 	"context"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
-	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sync/semaphore"
 	"solace_exporter/semp"
 	"sync"
 	"time"
+
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -17,7 +18,6 @@ const (
 )
 
 func NewAsyncFetcher(urlPath string, dataSource []DataSource, conf Config, logger log.Logger, connections *semaphore.Weighted, version float64) *AsyncFetcher {
-
 	var fetcher = &AsyncFetcher{
 		dataSource: dataSource,
 		conf:       conf,

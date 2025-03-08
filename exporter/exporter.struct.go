@@ -3,7 +3,7 @@ package exporter
 import (
 	"solace_exporter/semp"
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 )
 
 // Exporter collects Solace stats from the given URI and exports them using
