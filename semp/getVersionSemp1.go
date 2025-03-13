@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-// Get version of broker
-func (e *Semp) GetVersionSemp1(ch chan<- PrometheusMetric) (ok float64, err error) {
+// GetVersionSemp1 Get version of broker
+func (semp *Semp) GetVersionSemp1(ch chan<- PrometheusMetric) (ok float64, err error) {
 	type Data struct {
 		RPC struct {
 			Show struct {
@@ -31,26 +31,27 @@ func (e *Semp) GetVersionSemp1(ch chan<- PrometheusMetric) (ok float64, err erro
 		} `xml:"rpc"`
 		ExecuteResult struct {
 			Result string `xml:"code,attr"`
+			Reason string `xml:"reason,attr"`
 		} `xml:"execute-result"`
 	}
 
 	command := "<rpc><show><version/></show></rpc>"
-	body, err := e.postHTTP(e.brokerURI+"/SEMP", "application/xml", command, "VersionSemp1", 1)
+	body, err := semp.postHTTP(semp.brokerURI+"/SEMP", "application/xml", command, "VersionSemp1", 1)
 	if err != nil {
-		_ = level.Error(e.logger).Log("msg", "Can't scrape getVersionSemp1", "err", err, "broker", e.brokerURI)
-		return 0, err
+		_ = level.Error(semp.logger).Log("msg", "Can't scrape getVersionSemp1", "err", err, "broker", semp.brokerURI)
+		return -1, err
 	}
 	defer body.Close()
 	decoder := xml.NewDecoder(body)
 	var target Data
 	err = decoder.Decode(&target)
 	if err != nil {
-		_ = level.Error(e.logger).Log("msg", "Can't decode Xml getVersionSemp1", "err", err, "broker", e.brokerURI)
+		_ = level.Error(semp.logger).Log("msg", "Can't decode Xml getVersionSemp1", "err", err, "broker", semp.brokerURI)
 		return 0, err
 	}
 	if target.ExecuteResult.Result != "ok" {
-		_ = level.Error(e.logger).Log("msg", "Unexpected result for getVersionSemp1", "command", command, "result", target.ExecuteResult.Result, "broker", e.brokerURI)
-		return 0, errors.New("unexpected result: see log")
+		_ = level.Error(semp.logger).Log("msg", "Unexpected result for getVersionSemp1", "command", command, "result", target.ExecuteResult.Result, "reason", target.ExecuteResult.Reason, "broker", semp.brokerURI)
+		return 0, errors.New("unexpected result: " + target.ExecuteResult.Reason + ". see log for further details")
 	}
 
 	// remember this for the label
@@ -63,9 +64,9 @@ func (e *Semp) GetVersionSemp1(ch chan<- PrometheusMetric) (ok float64, err erro
 	var vmrVersionNr float64
 	vmrVersionNr, _ = strconv.ParseFloat(vmrVersionStrBuffer.String(), 64)
 
-	ch <- e.NewMetric(MetricDesc["Version"]["system_version_currentload"], prometheus.GaugeValue, vmrVersionNr)
-	ch <- e.NewMetric(MetricDesc["Version"]["system_version_uptime_totalsecs"], prometheus.GaugeValue, target.RPC.Show.Version.Uptime.TotalSecs)
-	ch <- e.NewMetric(MetricDesc["Version"]["exporter_version_current"], prometheus.GaugeValue, e.exporterVersion)
+	ch <- semp.NewMetric(MetricDesc["Version"]["system_version_currentload"], prometheus.GaugeValue, vmrVersionNr)
+	ch <- semp.NewMetric(MetricDesc["Version"]["system_version_uptime_totalsecs"], prometheus.GaugeValue, target.RPC.Show.Version.Uptime.TotalSecs)
+	ch <- semp.NewMetric(MetricDesc["Version"]["exporter_version_current"], prometheus.GaugeValue, semp.exporterVersion)
 
 	return 1, nil
 }
