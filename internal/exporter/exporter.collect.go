@@ -22,7 +22,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 		case "Version", "VersionV1":
 			up, err = e.semp.GetVersionSemp1(ch)
 		case "Health", "HealthV1":
-			if !e.config.IsHWBroker {
+			if !e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetHealthSemp1(ch)
 			} else {
 				up = 0
@@ -30,7 +30,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 				_ = level.Error(e.logger).Log("Software only  scrape target: \"" + dataSource.Name + "\". Please check documentation for valid targets.")
 			}
 		case "StorageElement", "StorageElementV1":
-			if !e.config.IsHWBroker {
+			if !e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetStorageElementSemp1(ch, dataSource.ItemFilter)
 			} else {
 				up = 0
@@ -38,7 +38,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 				_ = level.Error(e.logger).Log("Software only  scrape target: \"" + dataSource.Name + "\". Please check documentation for valid targets.")
 			}
 		case "Disk", "DiskV1":
-			if e.config.IsHWBroker {
+			if e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetDiskSemp1(ch)
 			} else {
 				up = 0
@@ -46,7 +46,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 				_ = level.Error(e.logger).Log("Hardware only  scrape target: \"" + dataSource.Name + "\". Please check documentation for valid targets.")
 			}
 		case "Raid", "RaidV1":
-			if e.config.IsHWBroker {
+			if e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetRaidSemp1(ch)
 			} else {
 				up = 0
@@ -58,7 +58,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 		case "Interface", "InterfaceV1":
 			up, err = e.semp.GetInterfaceSemp1(ch, dataSource.ItemFilter)
 		case "InterfaceHW", "InterfaceHWV1":
-			if e.config.IsHWBroker {
+			if e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetInterfaceHWSemp1(ch, dataSource.ItemFilter)
 			} else {
 				up = 0
@@ -74,7 +74,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 		case "Redundancy", "RedundancyV1":
 			up, err = e.semp.GetRedundancySemp1(ch)
 		case "Alarm", "AlarmV1":
-			if e.config.IsHWBroker {
+			if e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetAlarmSemp1(ch)
 			} else {
 				up = 0
@@ -82,7 +82,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 				_ = level.Error(e.logger).Log("Hardware only  scrape target: \"" + dataSource.Name + "\". Please check documentation for valid targets.")
 			}
 		case "Environment", "EnvironmentV1":
-			if e.config.IsHWBroker {
+			if e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetEnvironmentSemp1(ch)
 			} else {
 				up = 0
@@ -90,7 +90,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 				_ = level.Error(e.logger).Log("Hardware only  scrape target: \"" + dataSource.Name + "\". Please check documentation for valid targets.")
 			}
 		case "Hardware", "HardwareV1":
-			if e.config.IsHWBroker {
+			if e.config.ScrapeConfig.IsHWBroker {
 				up, err = e.semp.GetHardwareSemp1(ch)
 			} else {
 				up = 0
@@ -228,10 +228,10 @@ func (e *Exporter) Collect(pch chan<- prometheus.Metric) {
 
 func (e *Exporter) getVpnName(vpnFilter string) (string, error) {
 	if vpnFilter == "*" {
-		if len(strings.TrimSpace(e.config.DefaultVpn)) == 0 {
+		if len(strings.TrimSpace(e.config.ScrapeConfig.Vpn)) == 0 {
 			return "", errors.New("can't scrape Semp2 As vpnFilter was an * given and the defaultVpn is not set in configuration")
 		}
-		return e.config.DefaultVpn, nil
+		return e.config.ScrapeConfig.Vpn, nil
 	}
 
 	return vpnFilter, nil

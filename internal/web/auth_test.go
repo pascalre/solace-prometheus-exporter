@@ -3,7 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
-	"solace_exporter/internal/exporter"
+	"solace_exporter/internal/config"
 	"strings"
 	"testing"
 )
@@ -20,8 +20,8 @@ func TestWrapWithAuthNoAuthRequired(t *testing.T) {
 
 	handler := newTestHandler()
 
-	authConf := exporter.ExporterAuthConfig{
-		Scheme:   "none",
+	authConf := config.ExporterAuthConfig{
+		Scheme:   config.AuthSchemeNone,
 		Username: "",
 		Password: "",
 	}
@@ -47,8 +47,8 @@ func TestWrapWithAuthBasicAuthSuccess(t *testing.T) {
 
 	handler := newTestHandler()
 
-	authConf := exporter.ExporterAuthConfig{
-		Scheme:   "basic",
+	authConf := config.ExporterAuthConfig{
+		Scheme:   config.AuthSchemeBasic,
 		Username: "admin",
 		Password: "secret",
 	}
@@ -76,8 +76,8 @@ func TestWrapWithAuthBasicAuthFailure(t *testing.T) {
 
 	handler := newTestHandler()
 
-	authConf := exporter.ExporterAuthConfig{
-		Scheme:   "basic",
+	authConf := config.ExporterAuthConfig{
+		Scheme:   config.AuthSchemeBasic,
 		Username: "admin",
 		Password: "secret",
 	}

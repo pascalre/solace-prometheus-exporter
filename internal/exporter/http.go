@@ -6,38 +6,35 @@ import (
 	"net/url"
 )
 
-func (conf *Config) basicHTTPClient() http.Client {
+func (e *Exporter) newHTTPClient() http.Client {
+	client := e.basicHTTPClient()
+	client.CheckRedirect = e.redirectPolicyFunc
+
+	return client
+}
+
+func (e *Exporter) basicHTTPClient() http.Client {
 	var client http.Client
 	var proxy func(req *http.Request) (*url.URL, error)
 
-	if conf.useSystemProxy {
-		proxy = http.ProxyFromEnvironment
-	}
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
 		Proxy:           proxy,
 	}
 	client = http.Client{
-		Timeout:   conf.Timeout,
+		Timeout:   e.config.ScrapeConfig.Timeout,
 		Transport: tr,
 	}
 	return client
 }
 
-func (conf *Config) newHTTPClient() http.Client {
-	client := conf.basicHTTPClient()
-	client.CheckRedirect = conf.redirectPolicyFunc
-
-	return client
-}
-
 // Redirect callback, re-insert basic auth string into header.
-func (conf *Config) redirectPolicyFunc(req *http.Request, _ []*http.Request) error {
-	f, _ := conf.httpVisitor()
+func (e *Exporter) redirectPolicyFunc(req *http.Request, _ []*http.Request) error {
+	f, _ := e.httpVisitor()
 	f(req)
 	return nil
 }
 
-func (conf *Config) httpVisitor() (func(*http.Request), error) {
-	return conf.setAuthHeader()
+func (e *Exporter) httpVisitor() (func(*http.Request), error) {
+	return e.setAuthHeader()
 }

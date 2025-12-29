@@ -4,15 +4,16 @@ import (
 	"crypto/tls"
 	"net/http"
 	"os"
-	"strings"
 	"time"
+
+	"solace_exporter/internal/config"
 
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/common/promlog"
 	"software.sslmate.com/src/go-pkcs12"
 )
 
-func ListenAndServeTLS(conf Config) {
+func ListenAndServeTLS(conf config.Config) {
 	promlogConfig := promlog.Config{
 		Level:  &promlog.AllowedLevel{},
 		Format: &promlog.AllowedFormat{},
@@ -24,16 +25,16 @@ func ListenAndServeTLS(conf Config) {
 
 	var tlsCert tls.Certificate
 
-	if strings.ToUpper(conf.CertType) == CertTypePKCS12 {
+	if conf.TLS.CertType == config.CertTypePKCS12 {
 		// Read byte data from pkcs12 keystore
-		p12Data, err := os.ReadFile(conf.Pkcs12File)
+		p12Data, err := os.ReadFile(conf.TLS.Certificate)
 		if err != nil {
 			level.Error(logger).Log("Error reading PKCS12 file", err)
 			return
 		}
 
 		// Extract cert and key from pkcs12 keystore
-		privateKey, leafCert, caCerts, err := pkcs12.DecodeChain(p12Data, conf.Pkcs12Pass)
+		privateKey, leafCert, caCerts, err := pkcs12.DecodeChain(p12Data, conf.TLS.Pkcs12Pass)
 		if err != nil {
 			level.Error(logger).Log("PKCS12 - Error decoding chain", err)
 			return
@@ -49,7 +50,7 @@ func ListenAndServeTLS(conf Config) {
 		}
 	} else {
 		var err error
-		tlsCert, err = tls.LoadX509KeyPair(conf.Certificate, conf.PrivateKey)
+		tlsCert, err = tls.LoadX509KeyPair(conf.TLS.Certificate, conf.TLS.PrivateKey)
 		if err != nil {
 			level.Error(logger).Log("PEM - Error loading keypair", err)
 			return

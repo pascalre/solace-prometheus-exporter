@@ -2,6 +2,7 @@ package exporter
 
 import (
 	"context"
+	"solace_exporter/internal/config"
 	"solace_exporter/internal/semp"
 	"sync"
 	"time"
@@ -17,7 +18,7 @@ const (
 	capMetricChan = 1000
 )
 
-func NewAsyncFetcher(urlPath string, dataSource []DataSource, conf Config, logger log.Logger, connections *semaphore.Weighted) *AsyncFetcher {
+func NewAsyncFetcher(urlPath string, dataSource []config.DataSource, conf config.Config, logger log.Logger, connections *semaphore.Weighted) *AsyncFetcher {
 	var fetcher = &AsyncFetcher{
 		dataSource: dataSource,
 		conf:       conf,
@@ -46,7 +47,7 @@ func NewAsyncFetcher(urlPath string, dataSource []DataSource, conf Config, logge
 
 			// _ = level.Debug(logger).Log("msg", "Finished fetching for handler", "handler", "/"+urlPath)
 			// Be nice to the broker and wait between scrapes and let other threads fetch data.
-			sleepUntilNextIteration(startTime, conf.PrefetchInterval)
+			sleepUntilNextIteration(startTime, conf.ScrapeConfig.PrefetchInterval)
 		}
 	}
 
@@ -67,8 +68,8 @@ func sleepUntilNextIteration(startTime time.Time, interval time.Duration) {
 
 type AsyncFetcher struct {
 	mutex      sync.Mutex
-	dataSource []DataSource
-	conf       Config
+	dataSource []config.DataSource
+	conf       config.Config
 	logger     log.Logger
 	metrics    map[string]semp.PrometheusMetric
 	exporter   *Exporter

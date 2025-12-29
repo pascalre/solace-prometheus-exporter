@@ -296,6 +296,35 @@ If the exporter is started with a config file argument, then the config file ent
 environment variables. If a parameter is neither found in the URL, nor the config file nor in the environment, the
 exporter exits with an error.
 
+### Settings
+| INI Key | Env Variable | Deprecated Keys | Default | Description |
+|---------|--------------|----------------|---------|-------------|
+| listenAddr | SOLACE_LISTEN_ADDR | - | `:9628` | Address to listen on for web interface and telemetry. |
+| enableTLS | SOLACE_ENABLE_TLS | `env:SOLACE_LISTEN_TLS` | `false` | Enable TLS on listenAddr endpoint. Make sure to provide certificate and private key files when using certType=PEM or certificate and password when using PKCS12. |
+| listenCertType | SOLACE_LISTEN_CERT_TYPE | `env:SOLACE_LISTEN_CERTTYPE` | `pem` | Set the certificate type PEM | PKCS12. Make sure to provide certificate and private key files for PEM or certificate and password when using PKCS12. |
+| certificate | SOLACE_CERTIFICATE | `env:SOLACE_SERVER_CERT`, `ini:pkcs12File`, `env:SOLACE_PKCS12_FILE` | - | Path to the server certificate (including intermediates and CA's certificate) |
+| privateKey | SOLACE_PRIVATE_KEY | - | - | Path to the private key pem file |
+| pkcs12Pass | SOLACE_PKCS12_PASS | - | - | Password to decrypt PKCS12 file. |
+| scrapeUri | SOLACE_SCRAPE_URI | - | `http://localhost:8080` | Base URI on which to scrape Solace broker. |
+| vpn | SOLACE_VPN | `ini:defaultVpn`, `env:SOLACE_DEFAULT_VPN` | `default` | Message VPN name |
+| timeout | SOLACE_TIMEOUT | - | `5s` | Timeout for HTTP scrape requests to Solace broker. |
+| prefetchInterval | SOLACE_PREFETCH_INTERVAL | - | `0s` | When set an interval, all well configured endpoints will fetched async. This may help you to deal with slower broker or extreme amount of results. |
+| parallelSempConnections | SOLACE_PARALLEL_SEMP_CONNECTIONS | - | `1` | Maximum connections to the configured broker. Keep in mind solace advices us to use max 10 SEMP connects per seconds. |
+| isHwBroker | SOLACE_IS_HW_BROKER | `ini:isHWBroker` | `false` | Flag that enables Usage of the operating system proxy configuration. |
+| sslVerify | SOLACE_SSL_VERIFY | - | `true` | Flag that enables HW Broker specific targets and disables SW specific ones. |
+| sslVerify | SOLACE_SSL_VERIFY |  | `true` |  |
+| logBrokerToSlowWarnings | SOLACE_LOG_BROKER_TO_SLOW_WARNINGS |  |  |  |
+| exporterAuthScheme | SOLACE_EXPORTER_AUTH_SCHEME |  | `none` |  |
+| exporterAuthUsername | SOLACE_EXPORTER_AUTH_USERNAME |  | - |  |
+| exporterAuthPassword | SOLACE_EXPORTER_AUTH_PASSWORD |  | - |  |
+| authScheme | SOLACE_AUTH_SCHEME |  | `basic` |  |
+| username | SOLACE_USERNAME |  | - |  |
+| password | SOLACE_PASSWORD |  | - |  |
+| oauthClientId | SOLACE_OAUTH_CLIENT_ID |  | - |  |
+| oauthClientSecret | SOLACE_OAUTH_CLIENT_SECRET |  | - |  |
+| oauthTokenUrl | SOLACE_OAUTH_TOKEN_URL |  | - |  |
+| oauthClientScope | SOLACE_OAUTH_CLIENT_SCOPE |  | - |  |
+
 ### Config File
 
 ```bash
@@ -360,10 +389,6 @@ sslVerify = false
 
 # Flag that enables HW Broker specific targets and disables SW specific ones.
 isHWBroker = false
-
-# Flag that enables Usage of the operating system proxy configuration.
-# false=No proxy will be used at all.
-useSystemProxy = false
 
 # 0s means disabled. When set an interval, all well configured endpoints will fetched async.
 # This may help you to deal with slower broker or extreme amount of results.
