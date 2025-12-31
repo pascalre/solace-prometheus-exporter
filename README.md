@@ -301,7 +301,7 @@ exporter exits with an error.
 |---------|--------------|----------------|---------|-------------|
 | listenAddr | SOLACE_LISTEN_ADDR | - | `:9628` | Address to listen on for web interface and telemetry. |
 | enableTLS | SOLACE_ENABLE_TLS | `env:SOLACE_LISTEN_TLS` | `false` | Enable TLS on listenAddr endpoint. Make sure to provide certificate and private key files when using certType=PEM or certificate and password when using PKCS12. |
-| listenCertType | SOLACE_LISTEN_CERT_TYPE | `env:SOLACE_LISTEN_CERTTYPE` | `pem` | Set the certificate type PEM | PKCS12. Make sure to provide certificate and private key files for PEM or certificate and password when using PKCS12. |
+| listenCertType | SOLACE_LISTEN_CERT_TYPE | `env:SOLACE_LISTEN_CERTTYPE` | `pem` | Set the certificate type PEM / PKCS12. Make sure to provide certificate and private key files for PEM or certificate and password when using PKCS12. |
 | certificate | SOLACE_CERTIFICATE | `env:SOLACE_SERVER_CERT`, `ini:pkcs12File`, `env:SOLACE_PKCS12_FILE` | - | Path to the server certificate (including intermediates and CA's certificate) |
 | privateKey | SOLACE_PRIVATE_KEY | - | - | Path to the private key pem file |
 | pkcs12Pass | SOLACE_PKCS12_PASS | - | - | Password to decrypt PKCS12 file. |
@@ -310,16 +310,15 @@ exporter exits with an error.
 | timeout | SOLACE_TIMEOUT | - | `5s` | Timeout for HTTP scrape requests to Solace broker. |
 | prefetchInterval | SOLACE_PREFETCH_INTERVAL | - | `0s` | When set an interval, all well configured endpoints will fetched async. This may help you to deal with slower broker or extreme amount of results. |
 | parallelSempConnections | SOLACE_PARALLEL_SEMP_CONNECTIONS | - | `1` | Maximum connections to the configured broker. Keep in mind solace advices us to use max 10 SEMP connects per seconds. |
-| isHwBroker | SOLACE_IS_HW_BROKER | `ini:isHWBroker` | `false` | Flag that enables Usage of the operating system proxy configuration. |
-| sslVerify | SOLACE_SSL_VERIFY | - | `true` | Flag that enables HW Broker specific targets and disables SW specific ones. |
-| sslVerify | SOLACE_SSL_VERIFY |  | `true` |  |
+| isHwBroker | SOLACE_IS_HW_BROKER | `ini:isHWBroker` | `false` | Enables HW Broker specific targets and disables SW specific ones. |
+| sslVerify | SOLACE_SSL_VERIFY | - | `true` | Verify SSL certificate of the scrape URI. |
 | logBrokerToSlowWarnings | SOLACE_LOG_BROKER_TO_SLOW_WARNINGS |  |  |  |
-| exporterAuthScheme | SOLACE_EXPORTER_AUTH_SCHEME |  | `none` |  |
-| exporterAuthUsername | SOLACE_EXPORTER_AUTH_USERNAME |  | - |  |
-| exporterAuthPassword | SOLACE_EXPORTER_AUTH_PASSWORD |  | - |  |
-| authScheme | SOLACE_AUTH_SCHEME |  | `basic` |  |
-| username | SOLACE_USERNAME |  | - |  |
-| password | SOLACE_PASSWORD |  | - |  |
+| exporterAuthScheme | SOLACE_EXPORTER_AUTH_SCHEME |  | `none` | Authentication scheme for protecting the exporter endpoints. Supported values: `none`, `basic` |
+| exporterAuthUsername | SOLACE_EXPORTER_AUTH_USERNAME |  | - | Username for basic auth |
+| exporterAuthPassword | SOLACE_EXPORTER_AUTH_PASSWORD |  | - | Password for basic auth |
+| authScheme | SOLACE_AUTH_SCHEME |  | `basic` | Authentication scheme for accessing the Solace broker. Supported values: `basic`, `oauth` |
+| username | SOLACE_USERNAME |  | - | Username for basic auth |
+| password | SOLACE_PASSWORD |  | - | Password for basic auth |
 | oauthClientId | SOLACE_OAUTH_CLIENT_ID |  | - |  |
 | oauthClientSecret | SOLACE_OAUTH_CLIENT_SECRET |  | - |  |
 | oauthTokenUrl | SOLACE_OAUTH_TOKEN_URL |  | - |  |
@@ -457,12 +456,6 @@ OAuth authentication is implemented using [golang.org/x/oauth2](https://pkg.go.d
 
 #### Securing the Exporter Endpoint
 The exporter now supports optional authentication for its own HTTP endpoints (including `/`, `/solace` and `/metrics`).
-
-|Config Key|Env Variable|Description|
-|-|-|-|
-|exporterAuthScheme|SOLACE_EXPORTER_AUTH_SCHEME|none or basic|
-|exporterAuthUsername|SOLACE_EXPORTER_AUTH_USERNAME|Username for basic auth|
-|exporterAuthPassword|SOLACE_EXPORTER_AUTH_PASSWORD|Password for basic auth|
 
 Default scheme is `none`, meaning no authentication is required unless configured. When basic is enabled, both username and password must be provided.
 ### URL
