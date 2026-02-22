@@ -34,60 +34,101 @@ type StatsItem struct {
 	BindCount float64
 }
 
-func queueStats(brokerURI string, username string, password string) {
-	type Data struct {
-		RPC struct {
-			Show struct {
-				Queue struct {
-					Queues struct {
-						Queue []struct {
-							QueueName string `xml:"name"`
-							Info      struct {
-								MsgVpnName string  `xml:"message-vpn"`
-								Quota      float64 `xml:"quota"`
-								Usage      float64 `xml:"current-spool-usage-in-mb"`
-								Owner      string  `xml:"owner"`
-								BindCount  float64 `xml:"bind-count"`
-							} `xml:"info"`
-						} `xml:"queue"`
-					} `xml:"queues"`
-				} `xml:"queue"`
-			} `xml:"show"`
-		} `xml:"rpc"`
-		MoreCookie struct {
-			RPC string `xml:",innerxml"`
-		} `xml:"more-cookie"`
-		ExecuteResult struct {
-			Result string `xml:"code,attr"`
-			Reason string `xml:"reason,attr"`
-		} `xml:"execute-result"`
+// Common XML structures
+type SempInfo struct {
+	MsgVpnName string  `xml:"message-vpn"`
+	Quota      float64 `xml:"quota"`
+	Usage      float64 `xml:"current-spool-usage-in-mb"`
+	Owner      string  `xml:"owner"`
+	BindCount  float64 `xml:"bind-count"`
+}
+
+type SempMoreCookie struct {
+	RPC string `xml:",innerxml"`
+}
+
+type SempExecuteResult struct {
+	Result string `xml:"code,attr"`
+	Reason string `xml:"reason,attr"`
+}
+
+type SempRpcResponse struct {
+	MoreCookie    SempMoreCookie    `xml:"more-cookie"`
+	ExecuteResult SempExecuteResult `xml:"execute-result"`
+}
+
+type EndpointItem struct {
+	Name string   `xml:"name"`
+	Info SempInfo `xml:"info"`
+}
+
+type QueueData struct {
+	RPC struct {
+		Show struct {
+			Queue struct {
+				Queues struct {
+					Queue []EndpointItem `xml:"queue"`
+				} `xml:"queues"`
+			} `xml:"queue"`
+		} `xml:"show"`
+	} `xml:"rpc"`
+	SempRpcResponse
+}
+
+type TopicEndpointData struct {
+	RPC struct {
+		Show struct {
+			TopicEndpoint struct {
+				TopicEndpoints struct {
+					TopicEndpoint []EndpointItem `xml:"topic-endpoint"`
+				} `xml:"topic-endpoints"`
+			} `xml:"topic-endpoint"`
+		} `xml:"show"`
+	} `xml:"rpc"`
+	SempRpcResponse
+}
+
+func decodeAndExtract[T any](
+	body io.Reader,
+	brokerURI string,
+	logName string,
+	getItems func(T) []EndpointItem,
+	getRpcResponse func(T) SempRpcResponse,
+) (string, []StatsItem, error) {
+	decoder := xml.NewDecoder(body)
+	var target T
+	err := decoder.Decode(&target)
+	if err != nil {
+		//nolint:gosec // G706: Log injection via taint analysis
+		log.Println("Can't decode "+logName, "err", err, "broker", brokerURI)
+		return "", nil, err
 	}
 
-	extractor := func(body io.Reader, brokerURI string) (string, []StatsItem, error) {
-		decoder := xml.NewDecoder(body)
-		var target Data
-		err := decoder.Decode(&target)
-		if err != nil {
-			//nolint:gosec // G706: Log injection via taint analysis
-			log.Println("Can't decode QueueDetailsSemp1", "err", err, "broker", brokerURI)
-			return "", nil, err
-		}
-		if target.ExecuteResult.Result != "ok" {
-			//nolint:gosec // G706: Log injection via taint analysis
-			log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
-			return "", nil, fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
-		}
+	resp := getRpcResponse(target)
+	if resp.ExecuteResult.Result != "ok" {
+		//nolint:gosec // G706: Log injection via taint analysis
+		log.Println("Can't scrape "+logName, "err", err, "broker", brokerURI)
+		return "", nil, fmt.Errorf("bad result: %s", resp.ExecuteResult.Reason)
+	}
 
-		var items []StatsItem
-		for _, queue := range target.RPC.Show.Queue.Queues.Queue {
-			items = append(items, StatsItem{
-				Name:      queue.QueueName,
-				Vpn:       queue.Info.MsgVpnName,
-				Owner:     queue.Info.Owner,
-				BindCount: queue.Info.BindCount,
-			})
-		}
-		return target.MoreCookie.RPC, items, nil
+	var items []StatsItem
+	for _, q := range getItems(target) {
+		items = append(items, StatsItem{
+			Name:      q.Name,
+			Vpn:       q.Info.MsgVpnName,
+			Owner:     q.Info.Owner,
+			BindCount: q.Info.BindCount,
+		})
+	}
+	return resp.MoreCookie.RPC, items, nil
+}
+
+func queueStats(brokerURI string, username string, password string) {
+	extractor := func(body io.Reader, brokerURI string) (string, []StatsItem, error) {
+		return decodeAndExtract(body, brokerURI, "QueueDetailsSemp1",
+			func(t QueueData) []EndpointItem { return t.RPC.Show.Queue.Queues.Queue },
+			func(t QueueData) SempRpcResponse { return t.SempRpcResponse },
+		)
 	}
 
 	stats := processPages(brokerURI, username, password, "<rpc><show><queue><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></queue></show></rpc>", "QueueDetailsSemp1", extractor)
@@ -95,59 +136,11 @@ func queueStats(brokerURI string, username string, password string) {
 }
 
 func topicEndpointStats(brokerURI string, username string, password string) {
-	type Data struct {
-		RPC struct {
-			Show struct {
-				TopicEndpoint struct {
-					TopicEndpoints struct {
-						TopicEndpoint []struct {
-							TopicEndpointName string `xml:"name"`
-							Info              struct {
-								MsgVpnName string  `xml:"message-vpn"`
-								Quota      float64 `xml:"quota"`
-								Usage      float64 `xml:"current-spool-usage-in-mb"`
-								Owner      string  `xml:"owner"`
-								BindCount  float64 `xml:"bind-count"`
-							} `xml:"info"`
-						} `xml:"topic-endpoint"`
-					} `xml:"topic-endpoints"`
-				} `xml:"topic-endpoint"`
-			} `xml:"show"`
-		} `xml:"rpc"`
-		MoreCookie struct {
-			RPC string `xml:",innerxml"`
-		} `xml:"more-cookie"`
-		ExecuteResult struct {
-			Result string `xml:"code,attr"`
-			Reason string `xml:"reason,attr"`
-		} `xml:"execute-result"`
-	}
-
 	extractor := func(body io.Reader, brokerURI string) (string, []StatsItem, error) {
-		decoder := xml.NewDecoder(body)
-		var target Data
-		err := decoder.Decode(&target)
-		if err != nil {
-			//nolint:gosec // G706: Log injection via taint analysis
-			log.Println("Can't decode TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-			return "", nil, err
-		}
-		if target.ExecuteResult.Result != "ok" {
-			//nolint:gosec // G706: Log injection via taint analysis
-			log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-			return "", nil, fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
-		}
-
-		var items []StatsItem
-		for _, te := range target.RPC.Show.TopicEndpoint.TopicEndpoints.TopicEndpoint {
-			items = append(items, StatsItem{
-				Name:      te.TopicEndpointName,
-				Vpn:       te.Info.MsgVpnName,
-				Owner:     te.Info.Owner,
-				BindCount: te.Info.BindCount,
-			})
-		}
-		return target.MoreCookie.RPC, items, nil
+		return decodeAndExtract(body, brokerURI, "TopicEndpointDetailsSemp1",
+			func(t TopicEndpointData) []EndpointItem { return t.RPC.Show.TopicEndpoint.TopicEndpoints.TopicEndpoint },
+			func(t TopicEndpointData) SempRpcResponse { return t.SempRpcResponse },
+		)
 	}
 
 	stats := processPages(brokerURI, username, password, "<rpc><show><topic-endpoint><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></topic-endpoint></show></rpc>", "TopicEndpointDetailsSemp1", extractor)
