@@ -5,12 +5,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
-
-	"log"
 )
 
 func main() {
@@ -66,49 +65,55 @@ func queueStats(brokerURI string, username string, password string) {
 	var lastQueueName = ""
 	var page = 1
 	for nextRequest := "<rpc><show><queue><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></queue></show></rpc>"; nextRequest != ""; {
-		body, err := postHTTP(brokerURI+"/SEMP", "application/xml", nextRequest, username, password, "QueueDetailsSemp1", page)
-		page++
+		var err error
+		nextRequest, err = func(req string) (string, error) {
+			//nolint:gosec // G706: Log injection via taint analysis
+			body, err := postHTTP(brokerURI+"/SEMP", "application/xml", req, username, password, "QueueDetailsSemp1", page)
+			page++
 
-		if err != nil {
-			log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
-			return
-		}
-		//goland:noinspection ALL
-		defer body.Close()
-		decoder := xml.NewDecoder(body)
-		var target Data
-		err = decoder.Decode(&target)
-		if err != nil {
-			log.Println("Can't decode QueueDetailsSemp1", "err", err, "broker", brokerURI)
-			return
-		}
-		if target.ExecuteResult.Result != "ok" {
-			log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
-			return
-		}
-
-		nextRequest = target.MoreCookie.RPC
-
-		for _, queue := range target.RPC.Show.Queue.Queues.Queue {
-			queueKey := queue.Info.MsgVpnName + "___" + queue.QueueName
-			if queueKey == lastQueueName {
-				continue
+			if err != nil {
+				//nolint:gosec // G706: Log injection via taint analysis
+				log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
+				return "", err
 			}
-			lastQueueName = queueKey
+			defer body.Close()
+			decoder := xml.NewDecoder(body)
+			var target Data
+			err = decoder.Decode(&target)
+			if err != nil {
+				//nolint:gosec // G706: Log injection via taint analysis
+				log.Println("Can't decode QueueDetailsSemp1", "err", err, "broker", brokerURI)
+				return "", err
+			}
+			if target.ExecuteResult.Result != "ok" {
+				//nolint:gosec // G706: Log injection via taint analysis
+				log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
+				return "", fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
+			}
 
-			queueMap[queue.Info.Owner] = append(queueMap[queue.Info.Owner], struct {
-				name      string
-				vpn       string
-				bindCount float64
-			}{
-				name:      queue.QueueName,
-				vpn:       queue.Info.MsgVpnName,
-				bindCount: queue.Info.BindCount,
-			})
+			for _, queue := range target.RPC.Show.Queue.Queues.Queue {
+				queueKey := queue.Info.MsgVpnName + "___" + queue.QueueName
+				if queueKey == lastQueueName {
+					continue
+				}
+				lastQueueName = queueKey
+
+				queueMap[queue.Info.Owner] = append(queueMap[queue.Info.Owner], struct {
+					name      string
+					vpn       string
+					bindCount float64
+				}{
+					name:      queue.QueueName,
+					vpn:       queue.Info.MsgVpnName,
+					bindCount: queue.Info.BindCount,
+				})
+			}
+			return target.MoreCookie.RPC, nil
+		}(nextRequest)
+
+		if err != nil {
+			return
 		}
-
-		//goland:noinspection ALL
-		body.Close()
 	}
 
 	var totalQueues int
@@ -164,49 +169,52 @@ func topicEndpointStats(brokerURI string, username string, password string) {
 	var lastQueueName = ""
 	var page = 1
 	for nextRequest := "<rpc><show><topic-endpoint><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></topic-endpoint></show></rpc>"; nextRequest != ""; {
-		body, err := postHTTP(brokerURI+"/SEMP", "application/xml", nextRequest, username, password, "QueueDetailsSemp1", page)
-		page++
+		var err error
+		nextRequest, err = func(req string) (string, error) {
+			//nolint:gosec // G706: Log injection via taint analysis
+			body, err := postHTTP(brokerURI+"/SEMP", "application/xml", req, username, password, "TopicEndpointDetailsSemp1", page)
+			page++
 
-		if err != nil {
-			log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-			return
-		}
-		//goland:noinspection ALL
-		defer body.Close()
-		decoder := xml.NewDecoder(body)
-		var target Data
-		err = decoder.Decode(&target)
-		if err != nil {
-			log.Println("Can't decode TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-			return
-		}
-		if target.ExecuteResult.Result != "ok" {
-			log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-			return
-		}
-
-		nextRequest = target.MoreCookie.RPC
-
-		for _, topicEndpoint := range target.RPC.Show.TopicEndpoint.TopicEndpoints.TopicEndpoint {
-			queueKey := topicEndpoint.Info.MsgVpnName + "___" + topicEndpoint.TopicEndpointName
-			if queueKey == lastQueueName {
-				continue
+			if err != nil {
+				log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
+				return "", err
 			}
-			lastQueueName = queueKey
+			defer body.Close()
+			decoder := xml.NewDecoder(body)
+			var target Data
+			err = decoder.Decode(&target)
+			if err != nil {
+				log.Println("Can't decode TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
+				return "", err
+			}
+			if target.ExecuteResult.Result != "ok" {
+				log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
+				return "", fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
+			}
 
-			queueMap[topicEndpoint.Info.Owner] = append(queueMap[topicEndpoint.Info.Owner], struct {
-				name      string
-				vpn       string
-				bindCount float64
-			}{
-				name:      topicEndpoint.TopicEndpointName,
-				vpn:       topicEndpoint.Info.MsgVpnName,
-				bindCount: topicEndpoint.Info.BindCount,
-			})
+			for _, topicEndpoint := range target.RPC.Show.TopicEndpoint.TopicEndpoints.TopicEndpoint {
+				queueKey := topicEndpoint.Info.MsgVpnName + "___" + topicEndpoint.TopicEndpointName
+				if queueKey == lastQueueName {
+					continue
+				}
+				lastQueueName = queueKey
+
+				queueMap[topicEndpoint.Info.Owner] = append(queueMap[topicEndpoint.Info.Owner], struct {
+					name      string
+					vpn       string
+					bindCount float64
+				}{
+					name:      topicEndpoint.TopicEndpointName,
+					vpn:       topicEndpoint.Info.MsgVpnName,
+					bindCount: topicEndpoint.Info.BindCount,
+				})
+			}
+			return target.MoreCookie.RPC, nil
+		}(nextRequest)
+
+		if err != nil {
+			return
 		}
-
-		//goland:noinspection ALL
-		body.Close()
 	}
 
 	var totalQueues int
@@ -228,6 +236,7 @@ func postHTTP(uri string, _ string, body string, username string, password strin
 	//start := time.Now()
 	var httpClient = newHTTPClient()
 
+	//nolint:gosec // G704: SSRF via taint analysis
 	req, err := http.NewRequest("POST", uri, strings.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -235,6 +244,7 @@ func postHTTP(uri string, _ string, body string, username string, password strin
 
 	req.SetBasicAuth(username, password)
 
+	//nolint:gosec // G704: SSRF via taint analysis
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
