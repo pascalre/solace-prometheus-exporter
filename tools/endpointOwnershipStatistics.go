@@ -27,13 +27,14 @@ func main() {
 	topicEndpointStats(brokerURI, username, password)
 }
 
-func queueStats(brokerURI string, username string, password string) {
-	queueMap := make(map[string][]struct {
-		name      string
-		vpn       string
-		bindCount float64
-	})
+type StatsItem struct {
+	Name      string
+	Vpn       string
+	Owner     string
+	BindCount float64
+}
 
+func queueStats(brokerURI string, username string, password string) {
 	type Data struct {
 		RPC struct {
 			Show struct {
@@ -62,82 +63,38 @@ func queueStats(brokerURI string, username string, password string) {
 		} `xml:"execute-result"`
 	}
 
-	var lastQueueName = ""
-	var page = 1
-	for nextRequest := "<rpc><show><queue><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></queue></show></rpc>"; nextRequest != ""; {
-		var err error
-		nextRequest, err = func(req string) (string, error) {
-			//nolint:gosec // G706: Log injection via taint analysis
-			body, err := postHTTP(brokerURI+"/SEMP", "application/xml", req, username, password, "QueueDetailsSemp1", page)
-			page++
-
-			if err != nil {
-				//nolint:gosec // G706: Log injection via taint analysis
-				log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
-				return "", err
-			}
-			defer body.Close()
-			decoder := xml.NewDecoder(body)
-			var target Data
-			err = decoder.Decode(&target)
-			if err != nil {
-				//nolint:gosec // G706: Log injection via taint analysis
-				log.Println("Can't decode QueueDetailsSemp1", "err", err, "broker", brokerURI)
-				return "", err
-			}
-			if target.ExecuteResult.Result != "ok" {
-				//nolint:gosec // G706: Log injection via taint analysis
-				log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
-				return "", fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
-			}
-
-			for _, queue := range target.RPC.Show.Queue.Queues.Queue {
-				queueKey := queue.Info.MsgVpnName + "___" + queue.QueueName
-				if queueKey == lastQueueName {
-					continue
-				}
-				lastQueueName = queueKey
-
-				queueMap[queue.Info.Owner] = append(queueMap[queue.Info.Owner], struct {
-					name      string
-					vpn       string
-					bindCount float64
-				}{
-					name:      queue.QueueName,
-					vpn:       queue.Info.MsgVpnName,
-					bindCount: queue.Info.BindCount,
-				})
-			}
-			return target.MoreCookie.RPC, nil
-		}(nextRequest)
-
+	extractor := func(body io.Reader, brokerURI string) (string, []StatsItem, error) {
+		decoder := xml.NewDecoder(body)
+		var target Data
+		err := decoder.Decode(&target)
 		if err != nil {
-			return
+			//nolint:gosec // G706: Log injection via taint analysis
+			log.Println("Can't decode QueueDetailsSemp1", "err", err, "broker", brokerURI)
+			return "", nil, err
 		}
+		if target.ExecuteResult.Result != "ok" {
+			//nolint:gosec // G706: Log injection via taint analysis
+			log.Println("Can't scrape QueueDetailsSemp1", "err", err, "broker", brokerURI)
+			return "", nil, fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
+		}
+
+		var items []StatsItem
+		for _, queue := range target.RPC.Show.Queue.Queues.Queue {
+			items = append(items, StatsItem{
+				Name:      queue.QueueName,
+				Vpn:       queue.Info.MsgVpnName,
+				Owner:     queue.Info.Owner,
+				BindCount: queue.Info.BindCount,
+			})
+		}
+		return target.MoreCookie.RPC, items, nil
 	}
 
-	var totalQueues int
-	for key, value := range queueMap {
-		log.Printf("Owner %s has %d queues\n", key, len(value))
-		totalQueues += len(value)
-	}
-	log.Printf("Total number of queues: %d\n", totalQueues)
-
-	for key, value := range queueMap {
-		log.Printf("Owner %s has:\n", key)
-		for _, q := range value {
-			log.Printf("\t%s\n", q.name)
-		}
-	}
+	stats := processPages(brokerURI, username, password, "<rpc><show><queue><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></queue></show></rpc>", "QueueDetailsSemp1", extractor)
+	printStats(stats, "Owner", "queues")
 }
 
 func topicEndpointStats(brokerURI string, username string, password string) {
-	queueMap := make(map[string][]struct {
-		name      string
-		vpn       string
-		bindCount float64
-	})
-
 	type Data struct {
 		RPC struct {
 			Show struct {
@@ -166,68 +123,88 @@ func topicEndpointStats(brokerURI string, username string, password string) {
 		} `xml:"execute-result"`
 	}
 
-	var lastQueueName = ""
-	var page = 1
-	for nextRequest := "<rpc><show><topic-endpoint><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></topic-endpoint></show></rpc>"; nextRequest != ""; {
-		var err error
-		nextRequest, err = func(req string) (string, error) {
+	extractor := func(body io.Reader, brokerURI string) (string, []StatsItem, error) {
+		decoder := xml.NewDecoder(body)
+		var target Data
+		err := decoder.Decode(&target)
+		if err != nil {
 			//nolint:gosec // G706: Log injection via taint analysis
-			body, err := postHTTP(brokerURI+"/SEMP", "application/xml", req, username, password, "TopicEndpointDetailsSemp1", page)
+			log.Println("Can't decode TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
+			return "", nil, err
+		}
+		if target.ExecuteResult.Result != "ok" {
+			//nolint:gosec // G706: Log injection via taint analysis
+			log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
+			return "", nil, fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
+		}
+
+		var items []StatsItem
+		for _, te := range target.RPC.Show.TopicEndpoint.TopicEndpoints.TopicEndpoint {
+			items = append(items, StatsItem{
+				Name:      te.TopicEndpointName,
+				Vpn:       te.Info.MsgVpnName,
+				Owner:     te.Info.Owner,
+				BindCount: te.Info.BindCount,
+			})
+		}
+		return target.MoreCookie.RPC, items, nil
+	}
+
+	stats := processPages(brokerURI, username, password, "<rpc><show><topic-endpoint><name>*</name><vpn-name>*</vpn-name><detail/><count/><num-elements>100</num-elements></topic-endpoint></show></rpc>", "TopicEndpointDetailsSemp1", extractor)
+	printStats(stats, "TopicEndpoint", "TopicEndpoints")
+}
+
+func processPages(brokerURI, username, password, initialRequest, logName string, extractor func(io.Reader, string) (string, []StatsItem, error)) map[string][]StatsItem {
+	statsMap := make(map[string][]StatsItem)
+	var lastKey = ""
+	var page = 1
+
+	for nextRequest := initialRequest; nextRequest != ""; {
+		var items []StatsItem
+		var err error
+
+		nextRequest, items, err = func(req string) (string, []StatsItem, error) {
+			//nolint:gosec // G706: Log injection via taint analysis
+			body, err := postHTTP(brokerURI+"/SEMP", "application/xml", req, username, password, logName, page)
 			page++
 
 			if err != nil {
-				log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-				return "", err
+				//nolint:gosec // G706: Log injection via taint analysis
+				log.Println("Can't scrape "+logName, "err", err, "broker", brokerURI)
+				return "", nil, err
 			}
 			defer body.Close()
-			decoder := xml.NewDecoder(body)
-			var target Data
-			err = decoder.Decode(&target)
-			if err != nil {
-				log.Println("Can't decode TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-				return "", err
-			}
-			if target.ExecuteResult.Result != "ok" {
-				log.Println("Can't scrape TopicEndpointDetailsSemp1", "err", err, "broker", brokerURI)
-				return "", fmt.Errorf("bad result: %s", target.ExecuteResult.Reason)
-			}
-
-			for _, topicEndpoint := range target.RPC.Show.TopicEndpoint.TopicEndpoints.TopicEndpoint {
-				queueKey := topicEndpoint.Info.MsgVpnName + "___" + topicEndpoint.TopicEndpointName
-				if queueKey == lastQueueName {
-					continue
-				}
-				lastQueueName = queueKey
-
-				queueMap[topicEndpoint.Info.Owner] = append(queueMap[topicEndpoint.Info.Owner], struct {
-					name      string
-					vpn       string
-					bindCount float64
-				}{
-					name:      topicEndpoint.TopicEndpointName,
-					vpn:       topicEndpoint.Info.MsgVpnName,
-					bindCount: topicEndpoint.Info.BindCount,
-				})
-			}
-			return target.MoreCookie.RPC, nil
+			return extractor(body, brokerURI)
 		}(nextRequest)
 
 		if err != nil {
-			return
+			return statsMap
+		}
+
+		for _, item := range items {
+			key := item.Vpn + "___" + item.Name
+			if key == lastKey {
+				continue
+			}
+			lastKey = key
+			statsMap[item.Owner] = append(statsMap[item.Owner], item)
 		}
 	}
+	return statsMap
+}
 
-	var totalQueues int
-	for key, value := range queueMap {
-		log.Printf("TopicEndpoint %s has %d queues\n", key, len(value))
-		totalQueues += len(value)
+func printStats(statsMap map[string][]StatsItem, ownerLabel string, totalLabel string) {
+	var total int
+	for key, value := range statsMap {
+		log.Printf("%s %s has %d queues\n", ownerLabel, key, len(value))
+		total += len(value)
 	}
-	log.Printf("Total number of TopicEndpoints: %d\n", totalQueues)
+	log.Printf("Total number of %s: %d\n", totalLabel, total)
 
-	for key, value := range queueMap {
+	for key, value := range statsMap {
 		log.Printf("Owner %s has:\n", key)
 		for _, q := range value {
-			log.Printf("\t%s\n", q.name)
+			log.Printf("\t%s\n", q.Name)
 		}
 	}
 }
