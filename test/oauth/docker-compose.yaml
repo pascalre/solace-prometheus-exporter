@@ -132,11 +132,17 @@ services:
       - "--log.format=json"
     ports:
       - 9628:9628
+    healthcheck:
+        test: ["CMD", "wget", "--spider", "-S", "http://localhost:9628/metrics"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 5s
 
   check_metric_scrape:
     depends_on:
       prometheus_exporter:
-        condition: service_started
+        condition: service_healthy
     image: alpine:latest
     networks:
       - solace_msg_net

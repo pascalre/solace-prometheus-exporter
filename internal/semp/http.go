@@ -24,6 +24,7 @@ func (semp *Semp) postHTTP(uri string, _ string, body string, logName string, pa
 
 	semp.httpRequestVisitor(req)
 
+	//nolint:gosec // G704: SSRF via taint analysis
 	resp, err := semp.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -52,6 +53,7 @@ func (semp *Semp) getHTTPbytes(uri string, _ string, logName string, page int) (
 
 	semp.httpRequestVisitor(req)
 
+	//nolint:gosec // G704: SSRF via taint analysis
 	resp, err := semp.httpClient.Do(req)
 	if err != nil {
 		return nil, err

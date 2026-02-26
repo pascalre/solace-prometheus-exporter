@@ -16,20 +16,23 @@ import (
 type ExporterAuthConfig struct {
 	Scheme   string
 	Username string
+	//nolint:gosec // G117: Config struct fields
 	Password string
 }
 
 // Config Collection of configs
 type Config struct {
-	ListenAddr              string
-	EnableTLS               bool
-	Certificate             string
-	PrivateKey              string
-	CertType                string
-	Pkcs12File              string
-	Pkcs12Pass              string
-	ScrapeURI               string
-	Username                string
+	ListenAddr  string
+	EnableTLS   bool
+	Certificate string
+	//nolint:gosec // G117: Config struct fields
+	PrivateKey string
+	CertType   string
+	Pkcs12File string
+	Pkcs12Pass string
+	ScrapeURI  string
+	Username   string
+	//nolint:gosec // G117: Config struct fields
 	Password                string
 	DefaultVpn              string
 	SslVerify               bool

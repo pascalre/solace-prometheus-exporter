@@ -11,6 +11,21 @@ import (
 // GetQueueStatsSemp1 Get rates for each individual queue of all VPNs
 // This can result in heavy system load for lots of queues
 func (semp *Semp) GetQueueStatsSemp1(ch chan<- PrometheusMetric, vpnFilter string, itemFilter string) (float64, error) {
+	var page = 1
+	var lastQueueName = ""
+	for command := "<rpc><show><queue><name>" + itemFilter + "</name><vpn-name>" + vpnFilter + "</vpn-name><stats/><count/><num-elements>100</num-elements></queue></show></rpc>"; command != ""; {
+		nextCommand, result, err := semp.getQueueStatsSemp1Page(ch, command, page, &lastQueueName)
+		if err != nil {
+			return result, err
+		}
+		command = nextCommand
+		page++
+	}
+
+	return 1, nil
+}
+
+func (semp *Semp) getQueueStatsSemp1Page(ch chan<- PrometheusMetric, command string, page int, lastQueueName *string) (string, float64, error) {
 	type Data struct {
 		RPC struct {
 			Show struct {
@@ -50,61 +65,54 @@ func (semp *Semp) GetQueueStatsSemp1(ch chan<- PrometheusMetric, vpnFilter strin
 		ExecuteResult types.ExecuteResult `xml:"execute-result"`
 	}
 
-	var page = 1
-	var lastQueueName = ""
-	for command := "<rpc><show><queue><name>" + itemFilter + "</name><vpn-name>" + vpnFilter + "</vpn-name><stats/><count/><num-elements>100</num-elements></queue></show></rpc>"; command != ""; {
-		body, err := semp.postHTTP(semp.brokerURI+"/SEMP", "application/xml", command, "QueueStatsSemp1", page)
-		page++
+	body, err := semp.postHTTP(semp.brokerURI+"/SEMP", "application/xml", command, "QueueStatsSemp1", page)
+	if err != nil {
+		_ = level.Error(semp.logger).Log("msg", "Can't scrape QueueStatsSemp1", "err", err, "broker", semp.brokerURI)
+		return "", -1, err
+	}
+	defer body.Close()
 
-		if err != nil {
-			_ = level.Error(semp.logger).Log("msg", "Can't scrape QueueStatsSemp1", "err", err, "broker", semp.brokerURI)
-			return -1, err
-		}
-		defer body.Close()
-		decoder := xml.NewDecoder(body)
-		var target Data
-		err = decoder.Decode(&target)
-		if err != nil {
-			_ = level.Error(semp.logger).Log("msg", "Can't decode QueueStatsSemp1", "err", err, "broker", semp.brokerURI)
-			return 0, err
-		}
-		if err := target.ExecuteResult.OK(); err != nil {
-			_ = level.Error(semp.logger).Log(
-				"msg", "unexpected result",
-				"command", command,
-				"result", target.ExecuteResult.Result,
-				"reason", target.ExecuteResult.Reason,
-				"broker", semp.brokerURI,
-			)
-			return 0, err
-		}
-
-		_ = level.Debug(semp.logger).Log("msg", "Result of QueueStatsSemp1", "results", len(target.RPC.Show.Queue.Queues.Queue), "page", page-1)
-
-		command = target.MoreCookie.RPC
-		for _, queue := range target.RPC.Show.Queue.Queues.Queue {
-			queueKey := queue.Info.MsgVpnName + "___" + queue.QueueName
-			if queueKey == lastQueueName {
-				continue
-			}
-			lastQueueName = queueKey
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["total_bytes_spooled"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TotalByteSpooled, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["total_messages_spooled"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TotalMsgSpooled, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_redelivered"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MsgRedelivered, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_transport_retransmitted"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MsgRetransmit, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["spool_usage_exceeded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.SpoolUsageExceeded, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["max_message_size_exceeded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MsgSizeExceeded, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["total_deleted_messages"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.Deleted, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_shutdown_discarded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.SpoolShutdownDiscard, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_ttl_discarded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TTLDiscarded, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_ttl_dmq"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TTLDmq, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_ttl_dmq_failed"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TTLDmqFailed, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_max_redelivered_discarded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MaxRedeliveryDiscarded, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_max_redelivered_dmq"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MaxRedeliveryDmq, queue.Info.MsgVpnName, queue.QueueName)
-			ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_max_redelivered_dmq_failed"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MaxRedeliveryDmqFailed, queue.Info.MsgVpnName, queue.QueueName)
-		}
-		_ = body.Close()
+	decoder := xml.NewDecoder(body)
+	var target Data
+	err = decoder.Decode(&target)
+	if err != nil {
+		_ = level.Error(semp.logger).Log("msg", "Can't decode QueueStatsSemp1", "err", err, "broker", semp.brokerURI)
+		return "", 0, err
+	}
+	if err := target.ExecuteResult.OK(); err != nil {
+		_ = level.Error(semp.logger).Log(
+			"msg", "unexpected result",
+			"command", command,
+			"result", target.ExecuteResult.Result,
+			"reason", target.ExecuteResult.Reason,
+			"broker", semp.brokerURI,
+		)
+		return "", 0, err
 	}
 
-	return 1, nil
+	_ = level.Debug(semp.logger).Log("msg", "Result of QueueStatsSemp1", "results", len(target.RPC.Show.Queue.Queues.Queue), "page", page)
+
+	for _, queue := range target.RPC.Show.Queue.Queues.Queue {
+		queueKey := queue.Info.MsgVpnName + "___" + queue.QueueName
+		if queueKey == *lastQueueName {
+			continue
+		}
+		*lastQueueName = queueKey
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["total_bytes_spooled"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TotalByteSpooled, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["total_messages_spooled"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TotalMsgSpooled, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_redelivered"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MsgRedelivered, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_transport_retransmitted"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MsgRetransmit, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["spool_usage_exceeded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.SpoolUsageExceeded, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["max_message_size_exceeded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MsgSizeExceeded, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["total_deleted_messages"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.Deleted, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_shutdown_discarded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.SpoolShutdownDiscard, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_ttl_discarded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TTLDiscarded, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_ttl_dmq"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TTLDmq, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_ttl_dmq_failed"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.TTLDmqFailed, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_max_redelivered_discarded"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MaxRedeliveryDiscarded, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_max_redelivered_dmq"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MaxRedeliveryDmq, queue.Info.MsgVpnName, queue.QueueName)
+		ch <- semp.NewMetric(MetricDesc["QueueStats"]["messages_max_redelivered_dmq_failed"], prometheus.CounterValue, queue.Stats.MessageSpoolStats.MaxRedeliveryDmqFailed, queue.Info.MsgVpnName, queue.QueueName)
+	}
+
+	return target.MoreCookie.RPC, 0, nil
 }
