@@ -100,7 +100,7 @@ func (e *Exporter) CollectPrometheusMetric(ch chan<- semp.PrometheusMetric) {
 			}
 		case "ClockDetail", "ClockDetailV1":
 			if e.config.IsHWBroker {
-			    up, err = e.semp.GetClockDetailSemp1(ch)
+				up, err = e.semp.GetClockDetailSemp1(ch)
 			} else {
 				up = 0
 				err = errors.New("Hardware only scrape target: \"" + dataSource.Name + "\". Please check documentation for valid targets.")
